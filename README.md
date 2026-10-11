@@ -1,2 +1,0 @@
-# SingleR
-cell-type annotation

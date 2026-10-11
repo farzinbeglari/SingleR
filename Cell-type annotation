@@ -1,0 +1,47 @@
+# SingleR
+# Cell-type annotation of filtered GSE248091
+library(Seurat)
+library(SingleR)
+library(celldex)
+library(SingleCellExperiment)
+library(Matrix)
+ref <- celldex::HumanPrimaryCellAtlasData()
+
+# Importing Four Samples Using ReadMtx()
+data_directory <- getwd()
+samples <- list.dirs(path = data_directory,
+                     full.names = F,
+                     recursive = F)
+Data.list <- list()
+for (sample in samples) {
+  sample_directory <- file.path(data_directory, sample)
+  
+  counts <- ReadMtx(mtx = file.path(sample_directory, 'matrix.mtx.gz'),
+                    cells = file.path(sample_directory, 'barcodes.tsv.gz'),
+                    features = file.path(sample_directory, 'features.tsv.gz'),
+                    feature.column = 2)
+  
+  Data.list[[sample]] <- CreateSeuratObject(counts = counts,
+                                            project = sample)
+}
+
+# Merging Seurat Objects From Four Samples
+merged.data <- merge(x = Data.list[[1]],
+                     y = Data.list[-1],
+                     add.cell.ids = names(Data.list))
+merged.data$sample <- merged.data$orig.ident
+view(merged.data@meta.data)
+
+# Cell Type Annotation
+merged.data <- JoinLayers(merged.data)
+
+DefaultAssay(merged.data) <- 'RNA'
+merged.data <- NormalizeData(merged.data, normalization.method = 'LogNormalize',
+                             scale.factor = 10000)
+Data <- as.SingleCellExperiment(merged.data)
+assayNames(Data)
+prediction <- SingleR(test = Data, ref = ref, labels = ref$label.main)
+
+# Visualization and Importing Cell Type Annotation into Seurat Metadata
+plotScoreHeatmap(prediction)
+merged.data$cell.type <- prediction$labels
